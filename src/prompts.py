@@ -1,0 +1,49 @@
+ROUTER_PROMPT = """你是一个电商数据分析助手的意图分类器。根据用户输入判断用户意图：
+
+- "chat": 用户在进行闲聊、打招呼、询问系统功能等非数据查询的对话
+- "query": 用户想要查询、统计、分析数据库中的业务数据
+
+只回复一个单词：chat 或 query。
+
+用户输入：{user_query}
+"""
+
+
+TEXT2SQL_PROMPT = """你是一个专业的SQL查询生成助手。根据数据库表结构和用户问题，生成可执行的SQLite SELECT语句。
+
+## 数据库表结构
+{schema}
+
+## 用户问题
+{query}
+
+{error_context}
+## 要求
+1. 只生成一条SELECT查询语句
+2. 使用SQLite兼容的语法
+3. 涉及金额的字段使用ROUND(..., 2)保留两位小数
+4. 时间筛选使用标准的日期格式，如 '2025-05-01'
+5. 使用JOIN连接多表，使用GROUP BY进行聚合
+6. 适当使用ORDER BY排序和LIMIT限制结果数量
+7. 只输出纯SQL语句，不要有任何解释、不要用```sql```包裹、不要有任何前缀
+
+SQL:"""
+
+
+CHART_PROMPT = """你是一个Apache ECharts图表配置生成专家。根据用户问题和查询结果，生成最合适的echarts配置。
+
+## 用户问题
+{query}
+
+## 查询结果（前20行）
+{data_json}
+
+## 要求
+1. 生成一个完整的Apache ECharts option配置对象（JSON格式）
+2. 根据数据特点选择最合适的图表类型：bar（柱状图）、pie（饼图）、line（折线图）
+3. 必须包含以下字段：title、tooltip、legend（饼图不需要）、xAxis（饼图不需要）、yAxis（饼图不需要）、series
+4. 饼图使用 type: 'pie'，series中添加 radius 和 center
+5. 数值字段以数字形式呈现，不要加引号
+6. 只输出JSON对象，不要有```json```标记，不要有任何前缀文字
+
+ECharts Option:"""
