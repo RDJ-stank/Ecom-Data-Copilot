@@ -3,6 +3,7 @@ import pandas as pd
 from sqlalchemy import text
 from src.graph.state import AgentState
 from src.database import get_session
+from src.progress import report
 
 FORBIDDEN_KEYWORDS = {"DROP", "DELETE", "UPDATE", "INSERT", "TRUNCATE", "ALTER", "CREATE"}
 ALLOWED_STATEMENTS = {"SELECT", "EXPLAIN", "WITH"}
@@ -43,6 +44,7 @@ def _validate_sql(sql: str):
 
 
 def execute_sql_node(state: AgentState) -> dict:
+    report("⚡ 正在安全校验并执行查询...")
     sql = state["sql_query"]
     retry_count = state.get("retry_count", 0)
 

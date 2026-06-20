@@ -2,9 +2,11 @@ import json
 from src.graph.state import AgentState
 from src.prompts import CHART_PROMPT
 from src.llm import get_llm
+from src.progress import report
 
 
 def generate_chart_node(state: AgentState) -> dict:
+    report("📈 正在生成可视化图表配置...")
     query = state["user_query"]
     result = state.get("sql_result")
 

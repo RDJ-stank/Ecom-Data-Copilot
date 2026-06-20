@@ -2,9 +2,11 @@ from langchain_core.messages import AIMessage
 from src.graph.state import AgentState
 from src.prompts import ROUTER_PROMPT
 from src.llm import get_llm
+from src.progress import report
 
 
 def router_node(state: AgentState) -> dict:
+    report("🔍 正在识别查询意图...")
     query = state["user_query"]
     llm = get_llm(temperature=0.0)
     prompt = ROUTER_PROMPT.format(user_query=query)
