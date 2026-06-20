@@ -1,4 +1,4 @@
-import sys, os, json, io
+import sys, os, json
 import pandas as pd
 from datetime import datetime
 
@@ -24,17 +24,15 @@ st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    .stAppHeader {visibility: hidden;}
 
     .main .block-container {
-        padding-top: 1.5rem;
-        padding-bottom: 1rem;
+        padding-top: 1rem;
+        padding-bottom: 0.5rem;
     }
     section[data-testid="stSidebar"] .block-container {
         padding-top: 2rem;
     }
 
-    /* Accent overrides */
     :root {
         --primary-color: #818cf8;
     }
@@ -126,7 +124,6 @@ if "initialized" not in st.session_state or force_reset:
         from src.config import CHROMA_PATH
         if os.path.exists(CHROMA_PATH):
             shutil.rmtree(CHROMA_PATH, ignore_errors=True)
-
     init_db()
     seed_all()
     init_chroma_schema()
@@ -135,8 +132,8 @@ if "initialized" not in st.session_state or force_reset:
 if "workflow" not in st.session_state:
     st.session_state.workflow = build_workflow()
 
-if "history" not in st.session_state:
-    st.session_state.history = []
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 if "progress_log" not in st.session_state:
     st.session_state.progress_log = []
@@ -164,7 +161,6 @@ def _on_progress(msg: str):
 def run_query(user_query: str):
     st.session_state.progress_log = []
     set_callback(_on_progress)
-
     initial_state: AgentState = {
         "messages": [],
         "user_query": user_query,
@@ -177,8 +173,7 @@ def run_query(user_query: str):
         "retry_count": 0,
         "chart_config": None,
     }
-    result = st.session_state.workflow.invoke(initial_state)
-    return result
+    return st.session_state.workflow.invoke(initial_state)
 
 
 def _is_amount_col(name: str) -> bool:
@@ -203,25 +198,22 @@ def build_column_config(df: pd.DataFrame) -> dict:
 
 
 def extract_metrics(df: pd.DataFrame):
-    """从结果中挑1-3个关键数字用作指标卡"""
     metrics = []
-    # find first amount column for total
     amount_col = None
     for col in df.columns:
         if _is_amount_col(col) and df[col].dtype in ("float64", "int64", "float32", "int32"):
             amount_col = col
             break
-    # row count
-    if len(df) > 1 and amount_col:
+    if amount_col and len(df) > 0:
         total = df[amount_col].sum()
         if total > 0:
             metrics.append(("📊 汇总金额", f"¥{total:,.2f}"))
     if len(df) > 0:
         metrics.append(("📋 结果行数", f"{len(df)} 条"))
-    # if single row, show key values
-    if len(df) == 1 and amount_col:
-        val = df[amount_col].iloc[0]
-        metrics.append(("💎 核心数值", f"¥{val:,.2f}"))
+    if amount_col and len(df) > 0:
+        avg = df[amount_col].mean()
+        if avg > 0 and len(df) > 1:
+            metrics.append(("📈 平均值", f"¥{avg:,.2f}"))
     return metrics[:3]
 
 
@@ -246,7 +238,7 @@ with st.sidebar:
 
     st.divider()
 
-    st.markdown("### 💬 快捷分析场景")
+    st.markdown("### 💬 快捷分析")
     examples = [
         ("📦", "售后物流破损分析", "上个月因为物流破损导致退款金额最高的 Top 3 供应商，用柱状图"),
         ("👥", "用户等级价值分析", "统计不同用户等级带来的总订单金额占比，画饼图"),
@@ -258,9 +250,10 @@ with st.sidebar:
             with c1:
                 st.markdown(f"<div style='font-size:1.6rem;text-align:center;padding-top:0.3rem;'>{emoji}</div>", unsafe_allow_html=True)
             with c2:
-                btn_label = title
-                if st.button(btn_label, key=f"ex_{title}", use_container_width=True):
-                    st.session_state.pending_query = query
+                if st.button(title, key=f"ex_{title}", use_container_width=True):
+                    # add to messages just like a user typed it
+                    st.session_state.messages.append({"role": "user", "content": query})
+                    st.rerun()
 
     st.divider()
 
@@ -278,182 +271,151 @@ with st.sidebar:
     st.divider()
     if st.button("🔄 重新生成 Mock 数据", use_container_width=True):
         st.session_state.force_reset = True
-        st.session_state.history = []
+        st.session_state.messages = []
         st.rerun()
 
     st.markdown("<div style='text-align:center;padding-top:1rem;opacity:0.4;font-size:0.78rem;'>Powered by LangGraph + DeepSeek</div>", unsafe_allow_html=True)
 
-# ── Main Area ──────────────────────────────────────────────────
-# Welcome hero when cold start
-if not st.session_state.history:
-    st.markdown("""
-    <div style="text-align:center;padding:2rem 0 1.5rem 0;">
-        <h1 style="font-size:2.2rem;font-weight:700;margin-bottom:0.5rem;">📊 电商私域智能 BI</h1>
-        <p style="font-size:1.05rem;opacity:0.7;max-width:600px;margin:0 auto 1.5rem auto;">
-            用自然语言提问，AI 自动生成 SQL 并可视化为图表。<br>支持售后分析、用户价值、商品利润等多维度洞察。
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+# ── Chat Interface ─────────────────────────────────────────────
 
-    # Quick start cards
-    qc1, qc2, qc3 = st.columns(3)
-    cards = [
-        ("📦", "售后物流分析", "找出物流破损退款最高的供应商，定位售后风险源头"),
-        ("👥", "用户价值分层", "按用户等级统计订单金额占比，识别高价值客群"),
-        ("📈", "商品利润洞察", "品类销量排名与单件利润对比，优化选品策略"),
-    ]
-    for idx, (col, (emoji, title, desc)) in enumerate(zip([qc1, qc2, qc3], cards)):
-        with col:
-            st.markdown(f"""
-            <div style="background:linear-gradient(135deg,rgba(129,140,248,0.06) 0%,rgba(129,140,248,0.01) 100%);
-                        border-radius:14px;padding:1.5rem 1.2rem;border:1px solid rgba(129,140,248,0.10);
-                        height:100%;cursor:default;">
-                <div style="font-size:2rem;margin-bottom:0.5rem;">{emoji}</div>
-                <div style="font-weight:600;font-size:1rem;margin-bottom:0.35rem;">{title}</div>
-                <div style="font-size:0.82rem;opacity:0.6;line-height:1.5;">{desc}</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-    st.divider()
-
-# Chat-style input
-st.markdown("<div style='margin-top:0.5rem;'></div>", unsafe_allow_html=True)
-col_input, col_btn = st.columns([6, 1])
-with col_input:
-    user_input = st.chat_input("输入你的分析需求，例如：上个月哪个品类退款率最高？")
-with col_btn:
-    run_btn = st.button("🚀 分析", use_container_width=True, disabled=not api_key_ok)
-
-pending = st.session_state.pop("pending_query", None)
-if pending:
-    user_input = pending
-
-if user_input is None:
-    user_input = ""
-
-# ── Execute ────────────────────────────────────────────────────
-if user_input.strip() and api_key_ok:
-    with st.spinner("🤖 AI Agent 正在分析..."):
-        result = run_query(user_input.strip())
-    st.session_state.history.append(result)
-
-# ── Display Latest Result ──────────────────────────────────────
-if st.session_state.history:
-    latest = st.session_state.history[-1]
-    user_q = latest.get("user_query", "")
-
-    # Show progress timeline
-    progress_log = st.session_state.get("progress_log", [])
-    if progress_log and latest.get("intent") == "query":
-        with st.expander("🔍 查看执行过程", expanded=False):
-            for step in progress_log:
-                st.write(step)
-
-    intent = latest.get("intent", "")
-    if intent == "chat":
-        msgs = latest.get("messages", [])
-        if msgs:
-            st.chat_message("assistant").write(msgs[-1].content)
+# Render all messages
+for msg in st.session_state.messages:
+    role = msg["role"]
+    content = msg.get("content", "")
+    with st.chat_message(role):
+        if role == "user":
+            st.write(content)
         else:
-            st.chat_message("assistant").write("你好！我可以帮你查询和分析电商数据。")
-    else:
-        error = latest.get("error_msg", "")
-        result_data = latest.get("sql_result")
+            # assistant message — render result blocks
+            result = msg.get("result", {})
+            intent = result.get("intent", "")
+            progress_log = msg.get("progress_log", [])
 
-        # Error state
-        if error and not result_data:
-            retries = latest.get("retry_count", 0)
-            st.error(f"SQL 执行失败（已重试 {retries} 次）\n\n{error}")
-            if retries >= 3:
-                st.warning("已达最大重试次数，请尝试换一种方式描述问题。")
-        elif result_data is not None:
-            df = pd.DataFrame(result_data)
+            if progress_log:
+                with st.expander("🔍 执行过程", expanded=False):
+                    for step in progress_log:
+                        st.write(step)
 
-            # ── 1. Key Metrics ──
-            metrics = extract_metrics(df)
-            if metrics:
-                cols = st.columns(len(metrics))
-                for col, (label, value) in zip(cols, metrics):
-                    with col:
-                        st.metric(label=label, value=value)
+            if intent == "chat":
+                msgs = result.get("messages", [])
+                if msgs:
+                    st.write(msgs[-1].content)
+                else:
+                    st.write(content)
+                continue
 
-            # ── 2. Chart (top priority) ──
-            chart_config = latest.get("chart_config")
-            if chart_config:
-                st.markdown("### 📈 可视化图表")
-                # card wrapper effect
-                with st.container():
+            error = result.get("error_msg", "")
+            result_data = result.get("sql_result")
+
+            if error and not result_data:
+                retries = result.get("retry_count", 0)
+                st.error(f"SQL 执行失败（已重试 {retries} 次）\n\n{error}")
+                if retries >= 3:
+                    st.warning("已达最大重试次数，请尝试换一种方式描述问题。")
+                continue
+
+            if result_data is not None:
+                df = pd.DataFrame(result_data)
+                user_q = result.get("user_query", "")
+
+                # Metrics
+                metrics = extract_metrics(df)
+                if metrics:
+                    cols = st.columns(len(metrics))
+                    for col, (label, value) in zip(cols, metrics):
+                        with col:
+                            st.metric(label=label, value=value)
+
+                # Chart
+                chart_config = result.get("chart_config")
+                if chart_config:
+                    st.markdown("#### 📈 可视化图表")
                     try:
                         st_echarts(options=chart_config, height="420px")
                     except Exception as e:
                         st.warning(f"图表渲染失败：{e}")
 
-            # ── 3. Insight Conclusion ──
-            if result_data and len(result_data) > 0:
-                insight_key = f"insight_{hash(user_q)}"
-                if insight_key not in st.session_state:
-                    st.session_state[insight_key] = fetch_insight(user_q, result_data)
-                insight = st.session_state.get(insight_key, "")
-                if insight:
-                    st.markdown(f"""
-                    <div style="background:linear-gradient(135deg,rgba(129,140,248,0.08) 0%,rgba(129,140,248,0.02) 100%);
-                                border-radius:12px;padding:1rem 1.25rem;border-left:3px solid #818cf8;
-                                margin:0.8rem 0 1rem 0;">
-                        <span style="font-size:0.8rem;color:#818cf8;font-weight:600;">💡 AI 洞察</span><br>
-                        <span style="font-size:0.95rem;">{insight}</span>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # Insight
+                if len(result_data) > 0:
+                    insight_key = f"insight_{hash(user_q)}_{id(msg)}"
+                    if insight_key not in st.session_state:
+                        st.session_state[insight_key] = fetch_insight(user_q, result_data)
+                    insight = st.session_state.get(insight_key, "")
+                    if insight:
+                        st.markdown(f"""
+                        <div style="background:linear-gradient(135deg,rgba(129,140,248,0.08) 0%,rgba(129,140,248,0.02) 100%);
+                                    border-radius:12px;padding:1rem 1.25rem;border-left:3px solid #818cf8;
+                                    margin:0.5rem 0 0.5rem 0;">
+                            <span style="font-size:0.8rem;color:#818cf8;font-weight:600;">💡 AI 洞察</span><br>
+                            <span style="font-size:0.95rem;">{insight}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
-            # ── 4. Data Table ──
-            st.markdown("### 📋 数据明细")
-            col_config = build_column_config(df)
-            st.dataframe(
-                df,
-                column_config=col_config,
-                use_container_width=True,
-                hide_index=True,
-                height=min(400, 35 * len(df) + 38),
-            )
-
-            # ── 5. CSV Download ──
-            csv = df.to_csv(index=False).encode("utf-8-sig")
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            st.download_button(
-                label="📥 下载 CSV",
-                data=csv,
-                file_name=f"ecom_bi_{ts}.csv",
-                mime="text/csv",
-            )
-
-            # ── 6. SQL (collapsed, last) ──
-            sql = latest.get("sql_query", "")
-            if sql:
-                with st.expander("🛠️ 查看生成的 SQL 代码", expanded=False):
-                    st.code(sql, language="sql")
-
-            # Empty result
-            if len(result_data) == 0 and not error:
-                st.info("查询结果为空，请尝试调整问题描述。")
-
-# ── History ────────────────────────────────────────────────────
-if len(st.session_state.history) > 1:
-    st.divider()
-    st.markdown("### 📜 历史查询")
-    for i, entry in enumerate(reversed(st.session_state.history[:-1])):
-        q = entry.get("user_query", "")
-        label = f"Q: {q[:70]}..." if len(q) > 70 else f"Q: {q}"
-        with st.expander(label):
-            result_data = entry.get("sql_result")
-            if result_data:
-                df = pd.DataFrame(result_data)
+                # Data table
+                st.markdown("#### 📋 数据明细")
                 col_config = build_column_config(df)
-                st.dataframe(df, column_config=col_config, use_container_width=True, hide_index=True)
-            chart_config = entry.get("chart_config")
-            if chart_config:
-                try:
-                    st_echarts(options=chart_config, height="320px")
-                except Exception:
-                    pass
-            sql = entry.get("sql_query", "")
-            if sql:
-                st.code(sql, language="sql")
+                st.dataframe(
+                    df,
+                    column_config=col_config,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(400, 35 * len(df) + 38),
+                )
+
+                # CSV download
+                csv = df.to_csv(index=False).encode("utf-8-sig")
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                st.download_button(
+                    label="📥 下载 CSV",
+                    data=csv,
+                    file_name=f"ecom_bi_{ts}.csv",
+                    mime="text/csv",
+                )
+
+                # SQL
+                sql = result.get("sql_query", "")
+                if sql:
+                    with st.expander("🛠️ 查看生成的 SQL", expanded=False):
+                        st.code(sql, language="sql")
+
+                if len(result_data) == 0 and not error:
+                    st.info("查询结果为空，请尝试调整问题描述。")
+
+# Input — placed at bottom
+col1, col2 = st.columns([7, 1])
+with col1:
+    prompt = st.chat_input("输入你的分析需求，例如：上个月哪个品类退款率最高？")
+with col2:
+    if st.button("🧹 清空对话", use_container_width=True):
+        st.session_state.messages = []
+        st.rerun()
+
+if prompt and api_key_ok:
+    # Add user message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # Run query
+    with st.spinner("🤖 AI Agent 正在分析..."):
+        result = run_query(prompt.strip())
+
+    user_q = result.get("user_query", prompt)
+    intent = result.get("intent", "")
+
+    content = ""
+    if intent == "chat":
+        msgs = result.get("messages", [])
+        content = msgs[-1].content if msgs else ""
+    elif result.get("error_msg") and not result.get("sql_result"):
+        content = f"SQL 执行失败：{result['error_msg']}"
+    elif result.get("sql_result"):
+        row_count = len(result["sql_result"])
+        content = f"查询完成，共返回 {row_count} 条数据。"
+
+    # Add assistant message with full result attached
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": content,
+        "result": result,
+        "progress_log": st.session_state.get("progress_log", []),
+    })
+    st.rerun()
