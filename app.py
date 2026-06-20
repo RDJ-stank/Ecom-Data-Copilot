@@ -117,7 +117,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Init ───────────────────────────────────────────────────────
-if "initialized" not in st.session_state:
+force_reset = st.session_state.pop("force_reset", False)
+if "initialized" not in st.session_state or force_reset:
+    if force_reset:
+        from src.database import Base, engine
+        engine.dispose()
+        Base.metadata.drop_all(engine)
+        Base.metadata.create_all(engine)
+        import shutil
+        from src.config import CHROMA_PATH
+        if os.path.exists(CHROMA_PATH):
+            shutil.rmtree(CHROMA_PATH, ignore_errors=True)
+
     init_db()
     seed_all()
     init_chroma_schema()
@@ -268,11 +279,7 @@ with st.sidebar:
 
     st.divider()
     if st.button("🔄 重新生成 Mock 数据", use_container_width=True):
-        from src.database import Base, engine
-        Base.metadata.drop_all(engine)
-        Base.metadata.create_all(engine)
-        seed_all()
-        init_chroma_schema()
+        st.session_state.force_reset = True
         st.session_state.history = []
         st.rerun()
 

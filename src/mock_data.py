@@ -31,19 +31,22 @@ CATEGORY_PRICE_RANGE = {
 }
 
 START_DATE = datetime(2025, 1, 1)
-END_DATE = datetime(2026, 6, 19)
+END_DATE = datetime(2026, 6, 19, 23, 59, 59)
 
 
 def _random_date(start, end):
-    delta = end - start
-    return start + timedelta(days=random.randint(0, delta.days))
+    delta = (end - start).days
+    if delta <= 0:
+        return start
+    return start + timedelta(days=random.randint(0, delta))
 
 
 def _random_datetime(start, end):
-    delta = end - start
-    return start + timedelta(days=random.randint(0, delta.days),
-                             hours=random.randint(0, 23),
-                             minutes=random.randint(0, 59))
+    delta = (end - start)
+    total_seconds = int(delta.total_seconds())
+    if total_seconds <= 0:
+        return start
+    return start + timedelta(seconds=random.randint(0, total_seconds))
 
 
 def generate_users(session: Session, count=200):
