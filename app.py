@@ -15,7 +15,7 @@ from src.graph.edges import build_workflow
 from src.graph.state import AgentState
 from src.progress import set_callback
 from src.llm import get_llm
-from src.prompts import INSIGHT_PROMPT
+from src.prompts import INSIGHT_PROMPT, TITLE_PROMPT
 
 st.set_page_config(page_title="电商私域智能 BI", page_icon="📊", layout="wide")
 
@@ -100,6 +100,9 @@ if "sessions" not in st.session_state:
     sid = str(uuid.uuid4())[:8]
     st.session_state.sessions = {}
     st.session_state.active_session = sid
+
+if "editing_sid" not in st.session_state:
+    st.session_state.editing_sid = None
 
 if "insight_cache" not in st.session_state:
     st.session_state.insight_cache = {}
@@ -203,12 +206,15 @@ def fetch_insight(user_query: str, data: list) -> str:
         return ""
 
 
-def _auto_title(messages: list) -> str:
-    """derive a short title from the first user message"""
-    if not messages:
-        return "新对话"
-    first = messages[0].get("content", "")
-    return first[:20] + ("..." if len(first) > 20 else "")
+def _auto_title(first_user_msg: str) -> str:
+    try:
+        prompt = TITLE_PROMPT.format(query=first_user_msg)
+        llm = get_llm(temperature=0.5)
+        resp = llm.invoke(prompt)
+        title = resp.content.strip()
+        return title[:20] if title else first_user_msg[:15] + "..."
+    except Exception:
+        return first_user_msg[:15] + "..."
 
 
 def _execute_pending():
@@ -237,9 +243,7 @@ def _execute_pending():
         "content": content,
         "result": result,
     })
-    # update title
-    if not sess["title"] or sess["title"] == "新对话":
-        sess["title"] = _auto_title(msgs)
+    sess["title"] = _auto_title(msgs[0]["content"])
     st.rerun()
 
 
@@ -268,14 +272,34 @@ with st.sidebar:
     for sid, sdata in sessions_list:
         title = sdata.get("title", "未命名")
         is_active = sid == st.session_state.active_session
-        prefix = "▸ " if is_active else "  "
-        label = f"{prefix}{title}"
-        # truncate for display
-        short_label = label[:28] + "..." if len(label) > 28 else label
-        btn_type = "primary" if is_active else "secondary"
-        if st.button(short_label, key=f"sess_{sid}", use_container_width=True, type=btn_type):
-            st.session_state.active_session = sid
-            st.rerun()
+        editing = st.session_state.editing_sid == sid
+
+        c1, c2 = st.columns([0.82, 0.18])
+        with c1:
+            btn_type = "primary" if is_active else "secondary"
+            prefix = "▸ " if is_active else "  "
+            label = f"{prefix}{title}"
+            short_label = label[:25] + "..." if len(label) > 25 else label
+            if st.button(short_label, key=f"sess_{sid}", use_container_width=True, type=btn_type):
+                st.session_state.active_session = sid
+                st.session_state.editing_sid = None
+                st.rerun()
+        with c2:
+            edit_label = "✅" if editing else "✏️"
+            if st.button(edit_label, key=f"edit_{sid}", use_container_width=True):
+                st.session_state.editing_sid = sid if not editing else None
+                st.rerun()
+
+        if editing:
+            new_title = st.text_input(
+                "标题", value=title, key=f"title_input_{sid}",
+                label_visibility="collapsed", placeholder="输入标题..."
+            )
+            if st.button("保存", key=f"save_title_{sid}", use_container_width=True):
+                if new_title.strip():
+                    st.session_state.sessions[sid]["title"] = new_title.strip()
+                st.session_state.editing_sid = None
+                st.rerun()
 
     # Delete current session (only if more than 1)
     if len(st.session_state.sessions) > 1:
