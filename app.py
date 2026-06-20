@@ -1,4 +1,4 @@
-import sys, os, json
+import sys, os, json, uuid
 import pandas as pd
 from datetime import datetime
 
@@ -25,74 +25,41 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
-    .main .block-container {
-        padding-top: 1rem;
-        padding-bottom: 0.5rem;
-    }
-    section[data-testid="stSidebar"] .block-container {
-        padding-top: 2rem;
-    }
+    .main .block-container { padding-top: 1rem; padding-bottom: 0.5rem; }
+    section[data-testid="stSidebar"] .block-container { padding-top: 1.5rem; }
 
-    :root {
-        --primary-color: #818cf8;
-    }
+    :root { --primary-color: #818cf8; }
 
     div[data-testid="stMetric"] {
         background: linear-gradient(135deg, rgba(129,140,248,0.06) 0%, rgba(129,140,248,0.02) 100%);
-        border-radius: 14px;
-        padding: 1rem 1.25rem;
+        border-radius: 14px; padding: 1rem 1.25rem;
         border: 1px solid rgba(129,140,248,0.12);
     }
-    div[data-testid="stMetric"] label {
-        font-size: 0.8rem !important;
-    }
+    div[data-testid="stMetric"] label { font-size: 0.8rem !important; }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        font-size: 1.8rem !important;
-        font-weight: 700 !important;
+        font-size: 1.8rem !important; font-weight: 700 !important;
     }
 
+    div[data-testid="stExpander"], div[data-testid="stDataFrame"], .stAlert {
+        border-radius: 12px; overflow: hidden;
+    }
     div[data-testid="stExpander"] {
-        border-radius: 12px;
         border: 1px solid rgba(129,140,248,0.12);
         box-shadow: 0 1px 8px rgba(0,0,0,0.04);
-        overflow: hidden;
     }
-
     div[data-testid="stDataFrame"] {
-        border-radius: 12px;
-        overflow: hidden;
         border: 1px solid rgba(129,140,248,0.08);
     }
 
-    section[data-testid="stSidebar"] button[kind="secondary"] {
-        border-radius: 10px;
-        font-size: 0.9rem;
-        padding: 0.5rem 0.75rem;
-        transition: all 0.2s;
-    }
-    section[data-testid="stSidebar"] button[kind="secondary"]:hover {
-        border-color: #818cf8;
-        color: #818cf8;
-    }
-
-    .stButton > button {
-        border-radius: 8px;
-        font-weight: 500;
-    }
+    .stButton > button { border-radius: 8px; font-weight: 500; }
     .stButton > button:focus, .stButton > button:active {
         border-color: #818cf8 !important;
         box-shadow: 0 0 0 2px rgba(129,140,248,0.25) !important;
     }
-
     [data-testid="stSidebar"] {
         background: linear-gradient(180deg, rgba(129,140,248,0.03) 0%, rgba(129,140,248,0.00) 100%);
     }
-
-    .stDownloadButton > button {
-        border-radius: 8px;
-        font-size: 0.85rem;
-    }
-
+    .stDownloadButton > button { border-radius: 8px; font-size: 0.85rem; }
     .stChatInput textarea {
         border-radius: 12px !important;
         border: 1px solid rgba(129,140,248,0.25) !important;
@@ -101,13 +68,9 @@ st.markdown("""
         border-color: #818cf8 !important;
         box-shadow: 0 0 0 3px rgba(129,140,248,0.15) !important;
     }
-
-    .stAlert {
-        border-radius: 12px;
-    }
-
-    div[data-testid="stStatus"] {
-        border-radius: 12px;
+    /* session list buttons in sidebar — compact */
+    section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"] button {
+        text-align: left; padding: 0.4rem 0.6rem; font-size: 0.85rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -132,15 +95,32 @@ if "initialized" not in st.session_state or force_reset:
 if "workflow" not in st.session_state:
     st.session_state.workflow = build_workflow()
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# session structure: {"sessions": {id: {title, messages, created}}, "active": id}
+if "sessions" not in st.session_state:
+    sid = str(uuid.uuid4())[:8]
+    st.session_state.sessions = {}
+    st.session_state.active_session = sid
 
-if "progress_log" not in st.session_state:
-    st.session_state.progress_log = []
+if "insight_cache" not in st.session_state:
+    st.session_state.insight_cache = {}
 
-api_key_ok = bool(DEEPSEEK_API_KEY and DEEPSEEK_API_KEY != "sk-your-key-here")
+# ensure there's always an active session
+active = st.session_state.active_session
+if active not in st.session_state.sessions:
+    st.session_state.sessions[active] = {
+        "title": "对话 1",
+        "messages": [],
+        "created": datetime.now().isoformat(),
+    }
+
+_api_key_ok = bool(DEEPSEEK_API_KEY and DEEPSEEK_API_KEY != "sk-your-key-here")
+
 
 # ── Helpers ────────────────────────────────────────────────────
+def _current_session():
+    return st.session_state.sessions[st.session_state.active_session]
+
+
 def get_db_stats():
     session = get_session()
     try:
@@ -154,13 +134,8 @@ def get_db_stats():
         session.close()
 
 
-def _on_progress(msg: str):
-    st.session_state.progress_log.append(msg)
-
-
 def run_query(user_query: str):
-    st.session_state.progress_log = []
-    set_callback(_on_progress)
+    set_callback(lambda msg: None)  # progress disabled during single-run for speed
     initial_state: AgentState = {
         "messages": [],
         "user_query": user_query,
@@ -178,7 +153,7 @@ def run_query(user_query: str):
 
 def _is_amount_col(name: str) -> bool:
     kw = ["amount", "金额", "price", "价格", "cost", "成本", "profit", "利润",
-          "sum", "total", "总计", "合计", "收入", "支出", "退款", "actual", "订单金额"]
+          "sum", "total", "总计", "合计", "收入", "支出", "退款", "actual"]
     return any(k in name.lower() for k in kw)
 
 
@@ -228,32 +203,102 @@ def fetch_insight(user_query: str, data: list) -> str:
         return ""
 
 
+def _auto_title(messages: list) -> str:
+    """derive a short title from the first user message"""
+    if not messages:
+        return "新对话"
+    first = messages[0].get("content", "")
+    return first[:20] + ("..." if len(first) > 20 else "")
+
+
+def _execute_pending():
+    """If the last message is from user and unanswered, run query and append assistant."""
+    sess = _current_session()
+    msgs = sess["messages"]
+    if not msgs or msgs[-1]["role"] == "assistant":
+        return
+    last_user = msgs[-1]["content"]
+    with st.spinner("🤖 AI Agent 正在分析..."):
+        result = run_query(last_user)
+
+    intent = result.get("intent", "")
+    if intent == "chat":
+        msgs_result = result.get("messages", [])
+        content = msgs_result[-1].content if msgs_result else ""
+    elif result.get("error_msg") and not result.get("sql_result"):
+        content = f"SQL 执行失败：{result['error_msg']}"
+    elif result.get("sql_result"):
+        content = f"查询完成，共返回 {len(result['sql_result'])} 条数据。"
+    else:
+        content = "已处理。"
+
+    msgs.append({
+        "role": "assistant",
+        "content": content,
+        "result": result,
+    })
+    # update title
+    if not sess["title"] or sess["title"] == "新对话":
+        sess["title"] = _auto_title(msgs)
+    st.rerun()
+
+
 # ── Sidebar ────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 📊 Ecom BI")
-    st.caption("电商私域智能分析平台")
+    # ── Session Switcher ──
+    st.markdown("### 💬 对话记录")
 
-    if not api_key_ok:
-        st.error("请在 `.env` 中配置 `DEEPSEEK_API_KEY`")
+    # New chat button — prominent
+    if st.button("➕ 新建对话", use_container_width=True):
+        sid = str(uuid.uuid4())[:8]
+        st.session_state.sessions[sid] = {
+            "title": "新对话",
+            "messages": [],
+            "created": datetime.now().isoformat(),
+        }
+        st.session_state.active_session = sid
+        st.rerun()
+
+    # List existing sessions
+    sessions_list = sorted(
+        st.session_state.sessions.items(),
+        key=lambda kv: kv[1].get("created", ""),
+        reverse=True,
+    )
+    for sid, sdata in sessions_list:
+        title = sdata.get("title", "未命名")
+        is_active = sid == st.session_state.active_session
+        prefix = "▸ " if is_active else "  "
+        label = f"{prefix}{title}"
+        # truncate for display
+        short_label = label[:28] + "..." if len(label) > 28 else label
+        btn_type = "primary" if is_active else "secondary"
+        if st.button(short_label, key=f"sess_{sid}", use_container_width=True, type=btn_type):
+            st.session_state.active_session = sid
+            st.rerun()
+
+    # Delete current session (only if more than 1)
+    if len(st.session_state.sessions) > 1:
+        if st.button("🗑 删除当前对话", use_container_width=True):
+            del st.session_state.sessions[active]
+            # pick the most recent remaining
+            remaining = sorted(st.session_state.sessions.keys())
+            st.session_state.active_session = remaining[-1]
+            st.rerun()
 
     st.divider()
 
     st.markdown("### 💬 快捷分析")
     examples = [
-        ("📦", "售后物流破损分析", "上个月因为物流破损导致退款金额最高的 Top 3 供应商，用柱状图"),
-        ("👥", "用户等级价值分析", "统计不同用户等级带来的总订单金额占比，画饼图"),
-        ("📈", "商品品类利润洞察", "查询销量前五的商品品类，以及它们对应的平均单件利润，用柱状图"),
+        ("📦 售后物流破损分析", "上个月因为物流破损导致退款金额最高的 Top 3 供应商，用柱状图"),
+        ("👥 用户等级价值分析", "统计不同用户等级带来的总订单金额占比，画饼图"),
+        ("📈 商品品类利润洞察", "查询销量前五的商品品类，以及它们对应的平均单件利润，用柱状图"),
     ]
-    for emoji, title, query in examples:
-        with st.container():
-            c1, c2 = st.columns([0.15, 0.85])
-            with c1:
-                st.markdown(f"<div style='font-size:1.6rem;text-align:center;padding-top:0.3rem;'>{emoji}</div>", unsafe_allow_html=True)
-            with c2:
-                if st.button(title, key=f"ex_{title}", use_container_width=True):
-                    # add to messages just like a user typed it
-                    st.session_state.messages.append({"role": "user", "content": query})
-                    st.rerun()
+    for label, query in examples:
+        if st.button(label, key=f"ex_{label}", use_container_width=True):
+            sess = _current_session()
+            sess["messages"].append({"role": "user", "content": query})
+            st.rerun()
 
     st.divider()
 
@@ -271,37 +316,35 @@ with st.sidebar:
     st.divider()
     if st.button("🔄 重新生成 Mock 数据", use_container_width=True):
         st.session_state.force_reset = True
-        st.session_state.messages = []
         st.rerun()
 
     st.markdown("<div style='text-align:center;padding-top:1rem;opacity:0.4;font-size:0.78rem;'>Powered by LangGraph + DeepSeek</div>", unsafe_allow_html=True)
 
-# ── Chat Interface ─────────────────────────────────────────────
 
-# Render all messages
-for msg in st.session_state.messages:
+# ── Main Chat Area ────────────────────────────────────────────
+sess = _current_session()
+messages = sess["messages"]
+
+# Render title
+st.markdown(f"### {sess.get('title', '对话')}")
+
+# Render messages
+for msg in messages:
     role = msg["role"]
     content = msg.get("content", "")
     with st.chat_message(role):
         if role == "user":
             st.write(content)
         else:
-            # assistant message — render result blocks
             result = msg.get("result", {})
+            if not result:
+                st.write(content)
+                continue
+
             intent = result.get("intent", "")
-            progress_log = msg.get("progress_log", [])
-
-            if progress_log:
-                with st.expander("🔍 执行过程", expanded=False):
-                    for step in progress_log:
-                        st.write(step)
-
             if intent == "chat":
-                msgs = result.get("messages", [])
-                if msgs:
-                    st.write(msgs[-1].content)
-                else:
-                    st.write(content)
+                msgs_r = result.get("messages", [])
+                st.write(msgs_r[-1].content if msgs_r else content)
                 continue
 
             error = result.get("error_msg", "")
@@ -318,7 +361,6 @@ for msg in st.session_state.messages:
                 df = pd.DataFrame(result_data)
                 user_q = result.get("user_query", "")
 
-                # Metrics
                 metrics = extract_metrics(df)
                 if metrics:
                     cols = st.columns(len(metrics))
@@ -326,7 +368,6 @@ for msg in st.session_state.messages:
                         with col:
                             st.metric(label=label, value=value)
 
-                # Chart
                 chart_config = result.get("chart_config")
                 if chart_config:
                     st.markdown("#### 📈 可视化图表")
@@ -335,12 +376,11 @@ for msg in st.session_state.messages:
                     except Exception as e:
                         st.warning(f"图表渲染失败：{e}")
 
-                # Insight
                 if len(result_data) > 0:
-                    insight_key = f"insight_{hash(user_q)}_{id(msg)}"
-                    if insight_key not in st.session_state:
-                        st.session_state[insight_key] = fetch_insight(user_q, result_data)
-                    insight = st.session_state.get(insight_key, "")
+                    ikey = f"insight_{hash(user_q)}_{id(msg)}"
+                    if ikey not in st.session_state.insight_cache:
+                        st.session_state.insight_cache[ikey] = fetch_insight(user_q, result_data)
+                    insight = st.session_state.insight_cache.get(ikey, "")
                     if insight:
                         st.markdown(f"""
                         <div style="background:linear-gradient(135deg,rgba(129,140,248,0.08) 0%,rgba(129,140,248,0.02) 100%);
@@ -351,7 +391,6 @@ for msg in st.session_state.messages:
                         </div>
                         """, unsafe_allow_html=True)
 
-                # Data table
                 st.markdown("#### 📋 数据明细")
                 col_config = build_column_config(df)
                 st.dataframe(
@@ -362,7 +401,6 @@ for msg in st.session_state.messages:
                     height=min(400, 35 * len(df) + 38),
                 )
 
-                # CSV download
                 csv = df.to_csv(index=False).encode("utf-8-sig")
                 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                 st.download_button(
@@ -372,7 +410,6 @@ for msg in st.session_state.messages:
                     mime="text/csv",
                 )
 
-                # SQL
                 sql = result.get("sql_query", "")
                 if sql:
                     with st.expander("🛠️ 查看生成的 SQL", expanded=False):
@@ -381,41 +418,12 @@ for msg in st.session_state.messages:
                 if len(result_data) == 0 and not error:
                     st.info("查询结果为空，请尝试调整问题描述。")
 
-# Input — placed at bottom
-col1, col2 = st.columns([7, 1])
-with col1:
-    prompt = st.chat_input("输入你的分析需求，例如：上个月哪个品类退款率最高？")
-with col2:
-    if st.button("🧹 清空对话", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
-if prompt and api_key_ok:
-    # Add user message
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
-    # Run query
-    with st.spinner("🤖 AI Agent 正在分析..."):
-        result = run_query(prompt.strip())
-
-    user_q = result.get("user_query", prompt)
-    intent = result.get("intent", "")
-
-    content = ""
-    if intent == "chat":
-        msgs = result.get("messages", [])
-        content = msgs[-1].content if msgs else ""
-    elif result.get("error_msg") and not result.get("sql_result"):
-        content = f"SQL 执行失败：{result['error_msg']}"
-    elif result.get("sql_result"):
-        row_count = len(result["sql_result"])
-        content = f"查询完成，共返回 {row_count} 条数据。"
-
-    # Add assistant message with full result attached
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": content,
-        "result": result,
-        "progress_log": st.session_state.get("progress_log", []),
-    })
+# ── Input ─────────────────────────────────────────────────────
+prompt = st.chat_input("输入你的分析需求，例如：上个月哪个品类退款率最高？")
+if prompt and _api_key_ok:
+    sess["messages"].append({"role": "user", "content": prompt})
     st.rerun()
+
+# ── Auto-execute pending user message ─────────────────────────
+if messages and messages[-1]["role"] == "user" and _api_key_ok:
+    _execute_pending()
