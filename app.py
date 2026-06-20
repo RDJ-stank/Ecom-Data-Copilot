@@ -24,10 +24,10 @@ st.markdown("""
 <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header[data-testid="stHeader"] {display: none;}
+    .stAppHeader {visibility: hidden;}
 
     .main .block-container {
-        padding-top: 2rem;
+        padding-top: 1.5rem;
         padding-bottom: 1rem;
     }
     section[data-testid="stSidebar"] .block-container {
@@ -36,28 +36,26 @@ st.markdown("""
 
     /* Accent overrides */
     :root {
-        --primary-color: #6366f1;
+        --primary-color: #818cf8;
     }
 
     div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, rgba(99,102,241,0.05) 0%, rgba(99,102,241,0.02) 100%);
+        background: linear-gradient(135deg, rgba(129,140,248,0.06) 0%, rgba(129,140,248,0.02) 100%);
         border-radius: 14px;
         padding: 1rem 1.25rem;
-        border: 1px solid rgba(99,102,241,0.10);
+        border: 1px solid rgba(129,140,248,0.12);
     }
     div[data-testid="stMetric"] label {
         font-size: 0.8rem !important;
-        color: #64748b !important;
     }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
         font-size: 1.8rem !important;
         font-weight: 700 !important;
-        color: #1e293b !important;
     }
 
     div[data-testid="stExpander"] {
         border-radius: 12px;
-        border: 1px solid rgba(99,102,241,0.10);
+        border: 1px solid rgba(129,140,248,0.12);
         box-shadow: 0 1px 8px rgba(0,0,0,0.04);
         overflow: hidden;
     }
@@ -65,7 +63,7 @@ st.markdown("""
     div[data-testid="stDataFrame"] {
         border-radius: 12px;
         overflow: hidden;
-        border: 1px solid rgba(99,102,241,0.06);
+        border: 1px solid rgba(129,140,248,0.08);
     }
 
     section[data-testid="stSidebar"] button[kind="secondary"] {
@@ -75,8 +73,8 @@ st.markdown("""
         transition: all 0.2s;
     }
     section[data-testid="stSidebar"] button[kind="secondary"]:hover {
-        border-color: #6366f1;
-        color: #6366f1;
+        border-color: #818cf8;
+        color: #818cf8;
     }
 
     .stButton > button {
@@ -84,12 +82,12 @@ st.markdown("""
         font-weight: 500;
     }
     .stButton > button:focus, .stButton > button:active {
-        border-color: #6366f1 !important;
-        box-shadow: 0 0 0 2px rgba(99,102,241,0.25) !important;
+        border-color: #818cf8 !important;
+        box-shadow: 0 0 0 2px rgba(129,140,248,0.25) !important;
     }
 
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, rgba(99,102,241,0.02) 0%, rgba(99,102,241,0.00) 100%);
+        background: linear-gradient(180deg, rgba(129,140,248,0.03) 0%, rgba(129,140,248,0.00) 100%);
     }
 
     .stDownloadButton > button {
@@ -99,11 +97,11 @@ st.markdown("""
 
     .stChatInput textarea {
         border-radius: 12px !important;
-        border: 1px solid rgba(99,102,241,0.2) !important;
+        border: 1px solid rgba(129,140,248,0.25) !important;
     }
     .stChatInput textarea:focus {
-        border-color: #6366f1 !important;
-        box-shadow: 0 0 0 3px rgba(99,102,241,0.15) !important;
+        border-color: #818cf8 !important;
+        box-shadow: 0 0 0 3px rgba(129,140,248,0.15) !important;
     }
 
     .stAlert {
@@ -290,8 +288,8 @@ with st.sidebar:
 if not st.session_state.history:
     st.markdown("""
     <div style="text-align:center;padding:2rem 0 1.5rem 0;">
-        <h1 style="font-size:2.2rem;font-weight:700;color:#1e293b;margin-bottom:0.5rem;">📊 电商私域智能 BI</h1>
-        <p style="font-size:1.05rem;color:#64748b;max-width:600px;margin:0 auto 1.5rem auto;">
+        <h1 style="font-size:2.2rem;font-weight:700;margin-bottom:0.5rem;">📊 电商私域智能 BI</h1>
+        <p style="font-size:1.05rem;opacity:0.7;max-width:600px;margin:0 auto 1.5rem auto;">
             用自然语言提问，AI 自动生成 SQL 并可视化为图表。<br>支持售后分析、用户价值、商品利润等多维度洞察。
         </p>
     </div>
@@ -307,12 +305,12 @@ if not st.session_state.history:
     for idx, (col, (emoji, title, desc)) in enumerate(zip([qc1, qc2, qc3], cards)):
         with col:
             st.markdown(f"""
-            <div style="background:linear-gradient(135deg,rgba(99,102,241,0.04) 0%,rgba(99,102,241,0.01) 100%);
-                        border-radius:14px;padding:1.5rem 1.2rem;border:1px solid rgba(99,102,241,0.08);
+            <div style="background:linear-gradient(135deg,rgba(129,140,248,0.06) 0%,rgba(129,140,248,0.01) 100%);
+                        border-radius:14px;padding:1.5rem 1.2rem;border:1px solid rgba(129,140,248,0.10);
                         height:100%;cursor:default;">
                 <div style="font-size:2rem;margin-bottom:0.5rem;">{emoji}</div>
-                <div style="font-weight:600;font-size:1rem;color:#1e293b;margin-bottom:0.35rem;">{title}</div>
-                <div style="font-size:0.82rem;color:#94a3b8;line-height:1.5;">{desc}</div>
+                <div style="font-weight:600;font-size:1rem;margin-bottom:0.35rem;">{title}</div>
+                <div style="font-size:0.82rem;opacity:0.6;line-height:1.5;">{desc}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -398,11 +396,11 @@ if st.session_state.history:
                 insight = st.session_state.get(insight_key, "")
                 if insight:
                     st.markdown(f"""
-                    <div style="background:linear-gradient(135deg,rgba(99,102,241,0.06) 0%,rgba(99,102,241,0.02) 100%);
-                                border-radius:12px;padding:1rem 1.25rem;border-left:3px solid #6366f1;
+                    <div style="background:linear-gradient(135deg,rgba(129,140,248,0.08) 0%,rgba(129,140,248,0.02) 100%);
+                                border-radius:12px;padding:1rem 1.25rem;border-left:3px solid #818cf8;
                                 margin:0.8rem 0 1rem 0;">
-                        <span style="font-size:0.8rem;color:#6366f1;font-weight:600;">💡 AI 洞察</span><br>
-                        <span style="color:#475569;font-size:0.95rem;">{insight}</span>
+                        <span style="font-size:0.8rem;color:#818cf8;font-weight:600;">💡 AI 洞察</span><br>
+                        <span style="font-size:0.95rem;">{insight}</span>
                     </div>
                     """, unsafe_allow_html=True)
 
