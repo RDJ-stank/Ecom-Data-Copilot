@@ -69,3 +69,58 @@
 - 不添加任务范围外的重构、抽象或"顺手优化"。
 - 不创建 README、文档文件，除非用户明确要求。
 - 完成任务后不要总结"做了什么"——用户能看到 diff。
+
+## Matt Pocock Skills 自动路由规则
+
+项目已集成 [mattpocock/skills](https://github.com/mattpocock/skills)（`.claude/skills/`）。
+**用户不需要记指令名。** 从用户的语言中自动识别意图并调用对应 Skill：
+
+### 工程开发类
+
+| 用户说的话（关键词） | 自动调用的 Skill | 行为 |
+|---------------------|-----------------|------|
+| "排查/诊断/修 bug/出错了/挂了/报错" | `engineering/diagnosing-bugs` | 复现→缩小→假设→埋点→修复→回归 |
+| "写测试/TDD/先写测试/测试驱动" | `engineering/tdd` | 红-绿-重构循环，先写失败测试再写代码 |
+| "出个PRD/写需求/写规格/需求文档" | `engineering/to-prd` | 从对话上下文直接生成 PRD 并发布到 Issue |
+| "拆成任务/拆 Issue/拆分/分工" | `engineering/to-issues` | 把方案拆成独立的垂直切片 Issue |
+| "实现/开发/按PRD做" | `engineering/implement` | 基于 PRD/Issues 用 TDD 实现 |
+| "质疑我/挑战这个方案/disagree/stress test" | `engineering/grill-with-docs` | 逐一盘问方案，同步更新 ADR 和 CONTEXT |
+| "盘问我/灵魂拷问/质疑方案"（非代码场景） | `productivity/grill-me` | 纯盘问，不保存文件 |
+| "改进架构/重构架构/deepen/模块太浅" | `engineering/improve-codebase-architecture` | 扫描代码库找"还不够深"的模块 |
+| "原型/试试看/快速验证/POC" | `engineering/prototype` | 写一次性原型验证设计问题 |
+| "解决冲突/合并冲突/merge conflict" | `engineering/resolving-merge-conflicts` | 理解双方意图后解决冲突 |
+| "设计模块接口/领域建模/ADR" | `engineering/domain-modeling` | 构建领域模型，记录架构决策 |
+| "代码库设计/模块设计评审/二次审查" | `engineering/codebase-design` | 深度模块+小接口+干净接缝审查 |
+
+### 效率辅助类
+
+| 用户说的话（关键词） | 自动调用的 Skill | 行为 |
+|---------------------|-----------------|------|
+| "交接/保存上下文/新会话继续/压缩对话" | `productivity/handoff` | 把当前对话压缩成交接文档 |
+| "教我/学习/解释概念/帮我理解" | `productivity/teach` | 多会话教学模式，有词汇表和进度追踪 |
+
+### 项目基建类
+
+| 用户说的话（关键词） | 自动调用的 Skill | 行为 |
+|---------------------|-----------------|------|
+| "配置 hooks/pre-commit/提交前检查" | `misc/setup-pre-commit` | 配置 Husky + lint-staged + 类型检查 |
+| "git 安全/防误操作/拦截危险命令" | `misc/git-guardrails-claude-code` | 拦截 push --force / reset --hard 等危险命令 |
+| "脚手架/批量生成目录/练习模板" | `misc/scaffold-exercises` | 批量生成练习题目录结构 |
+
+### 工作流链路（常见组合）
+
+用户说「出个需求然后开发」，实际执行链路：
+1. 先调 `engineering/to-prd` 生成 PRD
+2. 用户确认后调 `engineering/to-issues` 拆分任务
+3. 调 `engineering/implement` 逐个实现
+
+用户说「排查这个 bug 然后写测试防住」：
+1. 调 `engineering/diagnosing-bugs` 诊断修复
+2. 调 `engineering/tdd` 补回归测试
+
+### 永不自动触发的 Skill（需用户明确说）
+
+- `engineering/setup-matt-pocock-skills` — 全局配置，只跑一次
+- `engineering/triage` — Issue 分流，需用户说要"分流 Issue"
+- `misc/migrate-to-shoehorn` — TypeScript 专用，此项目不适用
+- `productivity/writing-great-skills` — 写 skill 的元技能，需用户说要"写 skill"
