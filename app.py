@@ -447,6 +447,7 @@ for msg in messages:
                     data=csv,
                     file_name=f"ecom_bi_{ts}.csv",
                     mime="text/csv",
+                    key=f"dl_{id(msg)}_{ts}",
                 )
 
                 sql = result.get("sql_query", "")
