@@ -1,4 +1,5 @@
 import sqlparse
+import re
 from sqlalchemy import text
 from src.graph.state import AgentState
 from src.database import get_session
@@ -9,12 +10,12 @@ FORBIDDEN_KEYWORDS = {"DROP", "DELETE", "UPDATE", "INSERT", "TRUNCATE", "ALTER",
 ALLOWED_STATEMENTS = {"SELECT", "EXPLAIN", "WITH"}
 
 ERROR_HINTS = {
-    "SQL_EXEC": "错误类型：数据库执行错误。请检查字段名拼写、表名是否正确。",
-    "SQL_PARSE": "错误类型：SQL语法错误。请检查SQL语句结构。",
-    "SQL_FORBIDDEN": "错误类型：安全拦截。仅允许只读SELECT查询。",
-    "SQL_REVIEW_REJECT": "错误类型：审查未通过。请根据审查意见修正SQL。",
-    "LLM_EMPTY": "错误类型：模型返回空。请重试。",
-    "LLM_FORMAT": "错误类型：模型返回格式错误。请检查输出格式要求。",
+    "SQL_EXEC": "数据库执行错误。请检查字段名拼写是否正确、表名是否存在。",
+    "SQL_PARSE": "SQL语法解析失败。请检查SQL语句结构是否完整。",
+    "SQL_FORBIDDEN": "SQL包含禁止的DDL/DML关键字，仅允许纯SELECT只读查询。",
+    "SQL_REVIEW_REJECT": "Reviewer审查未通过，请根据建议修正SQL。",
+    "LLM_EMPTY": "模型返回空内容，请重试。",
+    "LLM_FORMAT": "模型返回格式异常，请按要求的格式输出。",
 }
 
 
@@ -43,9 +44,9 @@ def _validate_sql(sql: str):
         if first_keyword not in ALLOWED_STATEMENTS:
             raise ValueError(f"安全拦截：不允许执行 {first_keyword} 语句，仅允许 SELECT 查询")
 
-        sql_upper = str(stmt).upper()
+        stmt_str = str(stmt)
         for kw in FORBIDDEN_KEYWORDS:
-            if kw in sql_upper:
+            if re.search(r'\b' + kw + r'\b', stmt_str, re.IGNORECASE):
                 raise ValueError(f"安全拦截：SQL中包含危险关键字 {kw}")
 
 

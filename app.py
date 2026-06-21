@@ -220,13 +220,12 @@ def _execute_pending():
         return
     last_user = msgs[-1]["content"]
 
-    curr_frame = build_frame(last_user, prev_frame)
     prev_frame = sess.get("last_frame")
+    curr_frame = build_frame(last_user, prev_frame)
     cached_result = sess.get("cached_result")
     route = compare_frame(prev_frame, curr_frame)
 
     if route == CHANGE_CHART and cached_result and cached_result.get("sql_result"):
-        # Reuse data, only re-generate chart+insight
         with st.spinner("🤖 正在用新图表类型重新渲染..."):
             from src.graph.generate_chart import generate_chart_node
             chart_state = {
@@ -241,7 +240,8 @@ def _execute_pending():
         with st.spinner("🤖 AI Agent 正在分析..."):
             result = run_query(last_user)
         sess["cached_result"] = result
-        sess["last_frame"] = curr_frame
+
+    sess["last_frame"] = curr_frame
 
     intent = result.get("intent", "")
     if intent == "chat":

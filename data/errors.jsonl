@@ -1,1 +1,1 @@
-{"ts": "2026-06-21T17:39:21.020558", "code": "SQL_EXEC", "code_desc": "数据库执行错误", "node": "execute_sql", "error": "no such column: order_amount", "traceback": "Traceback (most recent call last):\n  File \"<string>\", line 66, in <module>\nValueError: no such column: order_amount\n", "context": {"user_query": "test", "sql_query": "SELECT order_amount FROM fact_orders", "retry_count": 1}}
+

@@ -30,6 +30,8 @@ def build_frame(user_query: str, prev: dict = None) -> dict:
         frame["subject"] = "after_sales"
     elif prev:
         frame["subject"] = prev.get("subject", "general")
+    else:
+        frame["subject"] = "general"
 
     # metric detection
     if any(kw in q for kw in ["退款金额", "退款额", "售后金额"]):
