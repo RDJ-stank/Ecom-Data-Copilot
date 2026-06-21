@@ -16,7 +16,7 @@ from src.graph.state import AgentState
 from src.progress import set_callback
 from src.llm import get_llm
 from src.prompts import TITLE_PROMPT
-from src.context_frame import build_frame, compare_frame, FRESH, CHANGE_CHART, CHANGE_FILTER, CHANGE_SUBJECT
+from src.context_frame import build_frame, compare_frame, FRESH, CHANGE_CHART, CHANGE_FILTER, CHANGE_SUBJECT, CHANGE_NONE
 
 st.set_page_config(page_title="电商私域智能 BI", page_icon="📊", layout="wide")
 
