@@ -225,21 +225,33 @@ def _execute_pending():
     cached_result = sess.get("cached_result")
     route = compare_frame(prev_frame, curr_frame)
 
-    if route == CHANGE_CHART and cached_result and cached_result.get("sql_result"):
-        with st.spinner("🤖 正在用新图表类型重新渲染..."):
-            from src.graph.generate_chart import generate_chart_node
-            chart_state = {
-                "user_query": last_user,
-                "sql_result": cached_result["sql_result"],
-            }
-            chart_update = generate_chart_node(chart_state)
-            result = {**cached_result, **chart_update, "user_query": last_user}
-    elif route == CHANGE_NONE and cached_result:
-        result = {**cached_result, "user_query": last_user}
-    else:
-        with st.spinner("🤖 AI Agent 正在分析..."):
-            result = run_query(last_user)
-        sess["cached_result"] = result
+    try:
+        if route == CHANGE_CHART and cached_result and cached_result.get("sql_result"):
+            with st.spinner("🤖 正在用新图表类型重新渲染..."):
+                from src.graph.generate_chart import generate_chart_node
+                chart_state = {
+                    "user_query": last_user,
+                    "sql_result": cached_result["sql_result"],
+                }
+                chart_update = generate_chart_node(chart_state)
+                result = {**cached_result, **chart_update, "user_query": last_user}
+        elif route == CHANGE_NONE and cached_result:
+            result = {**cached_result, "user_query": last_user}
+        else:
+            with st.spinner("🤖 AI Agent 正在分析..."):
+                result = run_query(last_user)
+            sess["cached_result"] = result
+    except Exception as e:
+        result = {
+            "intent": "chat",
+            "messages": [],
+            "error_msg": f"请求超时或内部异常：{e}",
+            "sql_result": None,
+            "sql_query": "",
+            "chart_config": None,
+            "insight": "",
+            "retry_count": 0,
+        }
 
     sess["last_frame"] = curr_frame
 
@@ -386,7 +398,12 @@ for msg in messages:
             intent = result.get("intent", "")
             if intent == "chat":
                 msgs_r = result.get("messages", [])
-                st.write(msgs_r[-1].content if msgs_r else content)
+                if msgs_r:
+                    st.write(msgs_r[-1].content)
+                elif content:
+                    st.write(content)
+                else:
+                    st.write("我是电商数据分析助手，可以帮你查询和分析销售数据、售后数据、用户价值等。")
                 continue
 
             error = result.get("error_msg", "")

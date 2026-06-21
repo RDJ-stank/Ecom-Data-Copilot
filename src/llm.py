@@ -1,6 +1,8 @@
 from langchain_openai import ChatOpenAI
 from src.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, LLM_TEMPERATURE
 
+LLM_TIMEOUT = 45  # seconds — prevent eternal hang on API stall
+
 
 def get_llm(temperature=None):
     return ChatOpenAI(
@@ -8,4 +10,6 @@ def get_llm(temperature=None):
         api_key=DEEPSEEK_API_KEY,
         base_url=DEEPSEEK_BASE_URL,
         temperature=temperature if temperature is not None else LLM_TEMPERATURE,
+        max_retries=1,
+        timeout=LLM_TIMEOUT,
     )
