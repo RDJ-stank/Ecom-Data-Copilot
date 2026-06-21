@@ -70,6 +70,23 @@
 - 不创建 README、文档文件，除非用户明确要求。
 - 完成任务后不要总结"做了什么"——用户能看到 diff。
 
+## 自动错误诊断与自愈规则
+
+项目在 `data/errors.jsonl` 写入结构化错误日志。每次 Session 启动时：
+1. 若 `data/errors.jsonl` 存在且非空，自动读取最近的错误
+2. 按错误码归类，识别 Top 3 高频错误
+3. 自动定位对应代码修复，无需用户干预
+4. 修复后清理 errors.jsonl
+
+错误码速查：
+- `SQL_EXEC` → 数据库执行错误，检查字段名/表名拼写
+- `SQL_PARSE` → SQL 语法错误，检查 sqlparse 解析逻辑
+- `SQL_FORBIDDEN` → 安全拦截，检查白名单/黑名单
+- `SQL_REVIEW_REJECT` → Reviewer 拦截，检查审查 Prompt 是否过严
+- `CHART_JSON` → 图表 JSON 解析失败，检查 LLM 输出格式
+- `LLM_EMPTY` → LLM 返回空，检查 API Key/网络/模型
+- `LLM_FORMAT` → LLM 返回格式错，检查 Prompt 中格式要求
+
 ## Matt Pocock Skills 自动路由规则
 
 项目已集成 [mattpocock/skills](https://github.com/mattpocock/skills)（`.claude/skills/`）。

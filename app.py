@@ -1,4 +1,4 @@
-import sys, os, json, uuid
+import sys, os, uuid
 import pandas as pd
 from datetime import datetime
 
@@ -15,7 +15,8 @@ from src.graph.edges import build_workflow
 from src.graph.state import AgentState
 from src.progress import set_callback
 from src.llm import get_llm
-from src.prompts import INSIGHT_PROMPT, TITLE_PROMPT
+from src.prompts import TITLE_PROMPT
+from src.context_frame import build_frame, compare_frame, FRESH, CHANGE_CHART, CHANGE_FILTER, CHANGE_SUBJECT
 
 st.set_page_config(page_title="电商私域智能 BI", page_icon="📊", layout="wide")
 
@@ -104,9 +105,6 @@ if "sessions" not in st.session_state:
 if "editing_sid" not in st.session_state:
     st.session_state.editing_sid = None
 
-if "insight_cache" not in st.session_state:
-    st.session_state.insight_cache = {}
-
 # ensure there's always an active session
 active = st.session_state.active_session
 if active not in st.session_state.sessions:
@@ -114,6 +112,8 @@ if active not in st.session_state.sessions:
         "title": "对话 1",
         "messages": [],
         "created": datetime.now().isoformat(),
+        "last_frame": None,
+        "cached_result": None,
     }
 
 _api_key_ok = bool(DEEPSEEK_API_KEY and DEEPSEEK_API_KEY != "sk-your-key-here")
@@ -138,18 +138,24 @@ def get_db_stats():
 
 
 def run_query(user_query: str):
-    set_callback(lambda msg: None)  # progress disabled during single-run for speed
+    set_callback(lambda msg: None)
     initial_state: AgentState = {
         "messages": [],
         "user_query": user_query,
         "intent": "",
         "retrieved_schema": "",
+        "pruned_schema": "",
         "sql_query": "",
         "sql_result": None,
         "sql_columns": None,
         "error_msg": "",
+        "error_code": "",
         "retry_count": 0,
         "chart_config": None,
+        "insight": "",
+        "needs_review": False,
+        "review_verdict": "",
+        "review_issues": [],
     }
     return st.session_state.workflow.invoke(initial_state)
 
@@ -195,17 +201,6 @@ def extract_metrics(df: pd.DataFrame):
     return metrics[:3]
 
 
-def fetch_insight(user_query: str, data: list) -> str:
-    try:
-        data_json = json.dumps(data[:10], ensure_ascii=False, default=str)
-        prompt = INSIGHT_PROMPT.format(query=user_query, data_json=data_json)
-        llm = get_llm(temperature=0.3)
-        resp = llm.invoke(prompt)
-        return resp.content.strip()
-    except Exception:
-        return ""
-
-
 def _auto_title(first_user_msg: str) -> str:
     try:
         prompt = TITLE_PROMPT.format(query=first_user_msg)
@@ -224,8 +219,29 @@ def _execute_pending():
     if not msgs or msgs[-1]["role"] == "assistant":
         return
     last_user = msgs[-1]["content"]
-    with st.spinner("🤖 AI Agent 正在分析..."):
-        result = run_query(last_user)
+
+    curr_frame = build_frame(last_user, prev_frame)
+    prev_frame = sess.get("last_frame")
+    cached_result = sess.get("cached_result")
+    route = compare_frame(prev_frame, curr_frame)
+
+    if route == CHANGE_CHART and cached_result and cached_result.get("sql_result"):
+        # Reuse data, only re-generate chart+insight
+        with st.spinner("🤖 正在用新图表类型重新渲染..."):
+            from src.graph.generate_chart import generate_chart_node
+            chart_state = {
+                "user_query": last_user,
+                "sql_result": cached_result["sql_result"],
+            }
+            chart_update = generate_chart_node(chart_state)
+            result = {**cached_result, **chart_update, "user_query": last_user}
+    elif route == CHANGE_NONE and cached_result:
+        result = {**cached_result, "user_query": last_user}
+    else:
+        with st.spinner("🤖 AI Agent 正在分析..."):
+            result = run_query(last_user)
+        sess["cached_result"] = result
+        sess["last_frame"] = curr_frame
 
     intent = result.get("intent", "")
     if intent == "chat":
@@ -259,6 +275,8 @@ with st.sidebar:
             "title": "新对话",
             "messages": [],
             "created": datetime.now().isoformat(),
+            "last_frame": None,
+            "cached_result": None,
         }
         st.session_state.active_session = sid
         st.rerun()
@@ -401,10 +419,7 @@ for msg in messages:
                         st.warning(f"图表渲染失败：{e}")
 
                 if len(result_data) > 0:
-                    ikey = f"insight_{hash(user_q)}_{id(msg)}"
-                    if ikey not in st.session_state.insight_cache:
-                        st.session_state.insight_cache[ikey] = fetch_insight(user_q, result_data)
-                    insight = st.session_state.insight_cache.get(ikey, "")
+                    insight = result.get("insight", "")
                     if insight:
                         st.markdown(f"""
                         <div style="background:linear-gradient(135deg,rgba(129,140,248,0.08) 0%,rgba(129,140,248,0.02) 100%);

@@ -1,25 +1,30 @@
 import json
 from src.graph.state import AgentState
-from src.prompts import CHART_PROMPT
+from src.prompts import CHART_INSIGHT_PROMPT
 from src.llm import get_llm
 from src.progress import report
+from src.error_collector import capture
 
 
 def generate_chart_node(state: AgentState) -> dict:
-    report("📈 正在生成可视化图表配置...")
+    report("📈 正在生成图表与分析结论...")
     query = state["user_query"]
     result = state.get("sql_result")
 
     if not result:
-        return {"chart_config": None}
+        return {"chart_config": None, "insight": ""}
 
-    top_rows = result[:20]
-    data_json = json.dumps(top_rows, ensure_ascii=False, default=str)
+    sample = _sample_rows(result)
+    data_json = json.dumps(sample, ensure_ascii=False, default=str)
 
-    prompt = CHART_PROMPT.format(query=query, data_json=data_json)
+    prompt = CHART_INSIGHT_PROMPT.format(query=query, data_json=data_json)
     llm = get_llm(temperature=0.0)
-    response = llm.invoke(prompt)
-    raw = response.content.strip()
+    try:
+        response = llm.invoke(prompt)
+        raw = response.content.strip()
+    except Exception as e:
+        capture("generate_chart", e, {"user_query": query})
+        return {"chart_config": None, "insight": ""}
 
     # strip markdown fences
     if raw.startswith("```"):
@@ -28,9 +33,27 @@ def generate_chart_node(state: AgentState) -> dict:
             raw = raw[:-3]
         raw = raw.strip()
 
+    config = None
+    insight = ""
     try:
-        config = json.loads(raw)
-    except json.JSONDecodeError:
-        config = None
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            config = parsed.get("chart")
+            insight = parsed.get("insight", "")
+        else:
+            config = None
+    except json.JSONDecodeError as e:
+        capture("generate_chart", e, {"user_query": query, "raw": raw[:200]})
 
-    return {"chart_config": config}
+    return {"chart_config": config, "insight": insight}
+
+
+def _sample_rows(rows: list, max_rows=20) -> list:
+    if len(rows) <= max_rows:
+        return rows
+    step = max(len(rows) // max_rows, 2)
+    sampled = rows[0:5]
+    sampled += rows[5::step]
+    if rows[-1] not in sampled:
+        sampled.append(rows[-1])
+    return sampled[:max_rows]
