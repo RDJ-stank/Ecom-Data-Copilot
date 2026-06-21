@@ -70,6 +70,20 @@
 - 不创建 README、文档文件，除非用户明确要求。
 - 完成任务后不要总结"做了什么"——用户能看到 diff。
 
+## 强制自测规则
+
+**每次代码修改后，必须自动执行以下验证，不用等用户说：**
+
+1. `python -c "from src.graph.edges import build_workflow; wf = build_workflow(); print('OK')"` — 工作流可编译
+2. 若有修改关键节点（router/execute/text2sql），跑对应单元场景
+3. **至少跑一个完整的 LangGraph invoke**，验证链路不出错
+4. `git status` 确认改动文件，`git diff --stat` 确认无意外改动
+5. `git push` 成功后告知用户需要重启 Streamlit
+
+**目标：用户手动测试前，我已经自己跑过一遍。**
+
+## 自动错误诊断与自愈规则
+
 ## 自动错误诊断与自愈规则
 
 项目在 `data/errors.jsonl` 写入结构化错误日志。每次 Session 启动时：

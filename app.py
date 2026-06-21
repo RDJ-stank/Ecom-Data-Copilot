@@ -93,8 +93,9 @@ if "initialized" not in st.session_state or force_reset:
     init_chroma_schema()
     st.session_state.initialized = True
 
-if "workflow" not in st.session_state:
-    st.session_state.workflow = build_workflow()
+@st.cache_resource
+def get_workflow():
+    return build_workflow()
 
 # session structure: {"sessions": {id: {title, messages, created}}, "active": id}
 if "sessions" not in st.session_state:
@@ -138,7 +139,7 @@ def get_db_stats():
 
 
 def run_query(user_query: str):
-    set_callback(lambda msg: None)
+    set_callback(lambda msg: None)  # progress captured for display
     initial_state: AgentState = {
         "messages": [],
         "user_query": user_query,
@@ -157,7 +158,7 @@ def run_query(user_query: str):
         "review_verdict": "",
         "review_issues": [],
     }
-    return st.session_state.workflow.invoke(initial_state)
+    return get_workflow().invoke(initial_state)
 
 
 def _is_amount_col(name: str) -> bool:
@@ -235,7 +236,7 @@ def _execute_pending():
                 }
                 chart_update = generate_chart_node(chart_state)
                 result = {**cached_result, **chart_update, "user_query": last_user}
-        elif route == CHANGE_NONE and cached_result:
+        elif route == CHANGE_NONE and cached_result and cached_result.get("sql_result"):
             result = {**cached_result, "user_query": last_user}
         else:
             with st.spinner("🤖 AI Agent 正在分析..."):
