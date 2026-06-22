@@ -1,7 +1,7 @@
 import json
 from src.graph.state import AgentState
 from src.prompts import CHART_INSIGHT_PROMPT
-from src.llm import get_llm
+from src.llm import invoke_llm
 from src.progress import report
 from src.error_collector import capture
 
@@ -18,15 +18,13 @@ def generate_chart_node(state: AgentState) -> dict:
     data_json = json.dumps(sample, ensure_ascii=False, default=str)
 
     prompt = CHART_INSIGHT_PROMPT.format(query=query, data_json=data_json)
-    llm = get_llm(temperature=0.0)
     try:
-        response = llm.invoke(prompt)
+        response = invoke_llm(prompt, temperature=0.0)
         raw = response.content.strip()
     except Exception as e:
         capture("generate_chart", e, {"user_query": query})
         return {"chart_config": None, "insight": ""}
 
-    # strip markdown fences
     if raw.startswith("```"):
         raw = raw.split("\n", 1)[-1]
         if raw.endswith("```"):
@@ -40,8 +38,6 @@ def generate_chart_node(state: AgentState) -> dict:
         if isinstance(parsed, dict):
             config = parsed.get("chart")
             insight = parsed.get("insight", "")
-        else:
-            config = None
     except json.JSONDecodeError as e:
         capture("generate_chart", e, {"user_query": query, "raw": raw[:200]})
 

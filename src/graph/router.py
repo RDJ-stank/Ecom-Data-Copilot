@@ -1,7 +1,7 @@
 from langchain_core.messages import AIMessage
 from src.graph.state import AgentState
 from src.prompts import ROUTER_PROMPT
-from src.llm import get_llm
+from src.llm import invoke_llm
 from src.progress import report
 
 DANGEROUS_KEYWORDS = {
@@ -9,11 +9,6 @@ DANGEROUS_KEYWORDS = {
     "修改", "更改", "改成", "改为", "更新", "变更",
     "插入", "新增", "添加记录", "插入数据",
     "drop", "delete", "update", "insert", "truncate", "alter",
-}
-
-CHAT_KEYWORDS = {
-    "你好", "谢谢", "再见", "能做什么", "功能", "帮助",
-    "hello", "hi", "谢谢", "拜拜",
 }
 
 
@@ -32,19 +27,18 @@ def router_node(state: AgentState) -> dict:
             "messages": [AIMessage(content="抱歉，本系统仅支持只读的 SELECT 数据查询，无法执行删除、修改或插入操作。如有数据分析需求，请换一种方式描述。")],
         }
 
-    llm = get_llm(temperature=0.0)
     prompt = ROUTER_PROMPT.format(user_query=query)
     try:
-        response = llm.invoke(prompt)
+        response = invoke_llm(prompt, temperature=0.0)
         intent = response.content.strip().lower()
     except Exception:
         intent = "chat"
 
     if "chat" in intent:
         try:
-            chat_llm = get_llm(temperature=0.7)
-            chat_response = chat_llm.invoke(
-                f"用户说：{query}\n你是电商数据助手，请友好简短地回复。"
+            chat_response = invoke_llm(
+                f"用户说：{query}\n你是电商数据助手，请友好简短地回复。",
+                temperature=0.7,
             )
             return {
                 "intent": "chat",

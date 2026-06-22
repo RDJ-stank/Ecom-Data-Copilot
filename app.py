@@ -14,7 +14,7 @@ from src.chromadb_setup import init_chroma_schema
 from src.graph.edges import build_workflow
 from src.graph.state import AgentState
 from src.progress import set_callback
-from src.llm import get_llm
+from src.llm import invoke_llm
 from src.prompts import TITLE_PROMPT
 from src.context_frame import build_frame, compare_frame, FRESH, CHANGE_CHART, CHANGE_FILTER, CHANGE_SUBJECT, CHANGE_NONE
 
@@ -205,8 +205,7 @@ def extract_metrics(df: pd.DataFrame):
 def _auto_title(first_user_msg: str) -> str:
     try:
         prompt = TITLE_PROMPT.format(query=first_user_msg)
-        llm = get_llm(temperature=0.5)
-        resp = llm.invoke(prompt)
+        resp = invoke_llm(prompt, temperature=0.5, timeout=15)
         title = resp.content.strip()
         return title[:20] if title else first_user_msg[:15] + "..."
     except Exception:
@@ -241,7 +240,8 @@ def _execute_pending():
         else:
             with st.spinner("🤖 AI Agent 正在分析..."):
                 result = run_query(last_user)
-            sess["cached_result"] = result
+            if result.get("intent") != "chat" and result.get("sql_result"):
+                sess["cached_result"] = result
     except Exception as e:
         result = {
             "intent": "chat",

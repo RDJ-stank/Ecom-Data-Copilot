@@ -2,8 +2,9 @@
 Only triggered for complex queries (JOIN / GROUP BY / subquery / HAVING / UNION)
 to avoid wasting tokens on simple single-table SELECTs.
 """
+import json
 from src.graph.state import AgentState
-from src.llm import get_llm
+from src.llm import invoke_llm
 
 REVIEW_PROMPT = """Audit this SQL for correctness and safety. Report in JSON.
 
@@ -49,15 +50,13 @@ def sql_reviewer_node(state: AgentState) -> dict:
 
     try:
         prompt = REVIEW_PROMPT.format(query=query, schema=schema, sql=sql)
-        llm = get_llm(temperature=0.0)
-        response = llm.invoke(prompt)
+        response = invoke_llm(prompt, temperature=0.0)
         raw = response.content.strip()
         if raw.startswith("```"):
             raw = raw.split("\n", 1)[-1]
             if raw.endswith("```"):
                 raw = raw[:-3]
             raw = raw.strip()
-        import json
         result = json.loads(raw)
     except Exception:
         result = {"verdict": "approved", "issues": [], "fix_suggestion": ""}

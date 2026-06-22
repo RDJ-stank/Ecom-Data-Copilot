@@ -1,20 +1,18 @@
+import os
 import httpx
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from langchain_openai import ChatOpenAI
 from src.config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, LLM_TEMPERATURE
 
-LLM_TIMEOUT = 20  # seconds per API call
+os.environ["LANGCHAIN_OPENAI_TCP_KEEPALIVE"] = "0"
 
-_default_client = None
+LLM_TIMEOUT = 25  # seconds — hard thread-level cap per LLM call
 
 
-def _get_http_client():
-    global _default_client
-    if _default_client is None:
-        _default_client = httpx.Client(
-            timeout=httpx.Timeout(LLM_TIMEOUT, connect=10.0),
-            limits=httpx.Limits(max_keepalive_connections=2, max_connections=10),
-        )
-    return _default_client
+def _invoke_with_timeout(llm, prompt, timeout=LLM_TIMEOUT):
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(llm.invoke, prompt)
+        return future.result(timeout=timeout)
 
 
 def get_llm(temperature=None):
@@ -24,5 +22,16 @@ def get_llm(temperature=None):
         base_url=DEEPSEEK_BASE_URL,
         temperature=temperature if temperature is not None else LLM_TEMPERATURE,
         max_retries=0,
-        http_client=_get_http_client(),
+        timeout=LLM_TIMEOUT,
+        request_timeout=LLM_TIMEOUT,
     )
+
+
+def invoke_llm(prompt, temperature=None, timeout=None):
+    llm = get_llm(temperature=temperature)
+    try:
+        return _invoke_with_timeout(llm, prompt, timeout or LLM_TIMEOUT)
+    except FutureTimeout:
+        raise TimeoutError(f"LLM API 调用超时（>{timeout or LLM_TIMEOUT}秒），请重试")
+    except Exception:
+        raise
